@@ -99,14 +99,24 @@ Because each run gets its own folder named by timestamp, you can run multiple ex
 
 ## Camera Recording (Modified Version Only)
 
+### Prerequisite — do this before each session _(updated June 17, 2026)_
+
+Before clicking **Fetch Current**:
+1. Open the **Windows Camera** app manually
+2. Click the **video icon** on the right side of the screen to switch from photo to video mode
+3. Leave the Camera app open in the background — do not close or minimize it to the taskbar
+
+The program does not open the Camera app for you. If it is not already open and in video mode when you click **Fetch Current**, an error dialog will appear and data collection will start without a recording.
+
+### How it works
+
 When you click **Fetch Current**, the app:
-1. Launches the Windows Camera app via `subprocess`
-2. Waits 2 seconds for it to open
-3. Sends a **spacebar keystroke** via `pyautogui` to start recording
+1. Finds the open Camera window by title and brings it into focus
+2. Sends a **spacebar keystroke** to start recording
+3. Returns focus to the GUI so you can continue using it normally
 
-When you click **Stop Fetch**, it sends another spacebar keystroke to stop recording.
+When you click **Stop Fetch**, the same steps repeat to stop recording.
 
-**Important notes:**
-- The Windows Camera app must be set up to record video (not photo) before running the experiment. The spacebar shortcut toggles video recording.
-- The camera app window needs to be in the foreground when the spacebar is sent. Avoid clicking elsewhere during the 2-second startup delay.
-- Camera recordings are saved to the default Windows Camera save location (typically `C:\Users\<you>\Videos\`) and are not moved into the `samples/` folder automatically.
+### Where recordings are saved
+
+Camera recordings are saved to the default Windows Camera save location (typically `C:\Users\<you>\Videos\`) and are not moved into the `samples/` folder automatically.
