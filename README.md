@@ -8,22 +8,31 @@ This application provides a graphical interface for running electrochemical sens
 
 | File | Description |
 |---|---|
-| `GUI_main_page_wStop-2026.ipynb` | Original version — data collection and logging only |
-| `GUI_main_page_wStop_2026_Modified.ipynb` | **Use this one** — same as original plus synchronized camera recording |
+| `main.py` | **Use this one** — run directly with Python, includes all features |
+| `GUI_main_page_wStop_2026_Modified.ipynb` | Backup — unfixed source the `main.py` was converted from |
+| `GUI_main_page_wStop-2026.ipynb` | Original notebook — data collection and logging only, no camera recording |
 
 ---
 
 ## Setup
 
-### 1. Run the notebook
+### 1. Run the app
 
-Open Jupyter and run all cells:
+```
+python main.py
+```
+
+A Tkinter window will open — this is the experiment GUI.
+
+### Legacy / Backup notebooks
+
+The `.ipynb` files are kept as backups only. To open them:
 
 ```
 jupyter notebook
 ```
 
-Select `GUI_main_page_wStop_2026_Modified.ipynb`, then use **Run → Run All Cells**. A Tkinter window will open — this is the experiment GUI.
+Select the file, then use **Run → Run All Cells**.
 
 ---
 
@@ -97,7 +106,7 @@ Because each run gets its own folder named by timestamp, you can run multiple ex
 
 ---
 
-## Camera Recording (Modified Version Only)
+## Camera Recording
 
 ### Prerequisite — do this before each session _(updated June 17, 2026)_
 
@@ -106,7 +115,7 @@ Before clicking **Fetch Current**:
 2. Click the **video icon** on the right side of the screen to switch from photo to video mode
 3. Leave the Camera app open in the background — do not close or minimize it to the taskbar
 
-The program does not open the Camera app for you. If it is not already open and in video mode when you click **Fetch Current**, an error dialog will appear and data collection will start without a recording.
+`main.py` does not open the Camera app for you. If it is not already open and in video mode when you click **Fetch Current**, an error dialog will appear and data collection will start without a recording.
 
 ### How it works
 
