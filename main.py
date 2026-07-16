@@ -106,7 +106,7 @@ def send_data_via_uart():                                                    # F
     except Exception as e:
         messagebox.showerror("Error", f"Failed to send data:\n{e}")             # Show error message
 
-def enter_data():                                # Function to enter data into the Excel file
+def enter_data(show_message=True):               # Function to enter data into the Excel file
     voltage = voltage_entry.get()                # Get voltage input
     syringe_size = syringe_size_entry.get()      # Get syringe size input
     speed = speed_entry.get()                    # Get speed input
@@ -122,7 +122,8 @@ def enter_data():                                # Function to enter data into t
 
         with open(file_path, "a") as file:
             file.write(f"Voltage: {voltage}, Syringe Size: {syringe_size}, Speed: {speed}, Current limit: {current_limit}\n")
-        messagebox.showinfo("Success", f"Data saved successfully to:\n{file_path}")  # Show success message
+        if show_message:
+            messagebox.showinfo("Success", f"Data saved successfully to:\n{file_path}")  # Show success message
 
 
     except Exception as e:
@@ -312,6 +313,7 @@ def stop_camera_recording():
 def start_fetch():
     global running
     if not running:
+        enter_data(show_message=False)
         start_camera_recording()
         running = True
         threading.Thread(target=fetch_loop, daemon=True).start()

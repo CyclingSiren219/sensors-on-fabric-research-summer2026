@@ -57,7 +57,7 @@ Use the **Refresh COM Ports** dropdown to detect available ports.
 | **Enter Data** | Saves the current input field values to `input_data.txt` in the run folder |
 | **Send to Device** | Transmits voltage, syringe size, and flow rate to the ESP32-S3 |
 | **Connect** | Opens the selected COM port at 115200 baud (UART mode only) |
-| **Fetch Current** | Starts continuous data collection, camera recording, and the real-time plot |
+| **Fetch Current** | Saves the current input field values to `input_data.txt`, then starts continuous data collection, camera recording, and the real-time plot |
 | **Stop Fetch** | Stops data collection and stops camera recording |
 | **Stop Process** | Sends a `STOP` command directly to the microcontroller over UART |
 | **Upload File** | Opens a file picker for G-code (`.gcode`) or image files |
@@ -90,10 +90,12 @@ The subfolder is created automatically the first time data is written — you do
 
 ### File contents
 
-**`input_data.txt`** — written when you click **Enter Data**:
+**`input_data.txt`** — written automatically the moment you click **Fetch Current**, capturing whatever values are in effect at the start of the run. You can also click **Enter Data** yourself at any point as a manual backup (e.g. to log a mid-run change):
 ```
 Voltage: 1.5, Syringe Size: 10, Speed: 5, Current limit: 2.5
 ```
+
+Note: if you change an input field mid-recording, it is only logged if you click **Enter Data** again — the auto-capture on **Fetch Current** only happens once, at the start of the run. Each line is appended, not overwritten, and is not timestamped, so multiple lines in the file aren't tied to a specific point in the run.
 
 **`output_data.txt`** — written on every reading while **Fetch Current** is active:
 ```
