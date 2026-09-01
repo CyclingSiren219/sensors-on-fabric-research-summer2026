@@ -5,9 +5,6 @@ from tkinter import filedialog, messagebox  # Importing file dialog and message 
 import subprocess                           # Importing subprocess for opening external applications
 import serial                               # Importing serial module for communication
 import serial.tools.list_ports              # Importing serial tools to list available COM ports
-import openpyxl                             # Importing openpyxl for handling Excel files
-from openpyxl import load_workbook          # Importing function to load Excel workbooks
-import shutil                               # Importing shutil for file operations
 import os                                   # Importing os module for system operations
 import requests                             # Importing requests module for HTTP requests
 import time  # Import time module
@@ -20,7 +17,23 @@ from datetime import datetime
 
 start_time = None  # Global variable to track start time
 running = False
-run_id = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
+# Fixed location for saved data, independent of where this script is launched from
+DATA_DIR = r'C:\WEPS(final files)\Input-Output Data'
+
+
+def new_run_id():
+    """Returns a timestamped folder name for one run, kept unique if two runs start in the same second."""
+    stamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    candidate = stamp
+    suffix = 2
+    while os.path.exists(os.path.join(DATA_DIR, candidate)):
+        candidate = f"{stamp}_{suffix}"
+        suffix += 1
+    return candidate
+
+
+run_id = new_run_id()   # Folder for the current run; a fresh one is created each time Fetch Current is clicked
 
 serial_connection = None                    # Global serial connection variable
 
@@ -106,13 +119,13 @@ def send_data_via_uart():                                                    # F
     except Exception as e:
         messagebox.showerror("Error", f"Failed to send data:\n{e}")             # Show error message
 
-def enter_data(show_message=True):               # Function to enter data into the Excel file
+def enter_data(show_message=True):               # Function to write the input values to input_data.txt
     voltage = voltage_entry.get()                # Get voltage input
     syringe_size = syringe_size_entry.get()      # Get syringe size input
     speed = speed_entry.get()                    # Get speed input
     current_limit=current_limit_entry.get()
 
-    folder = os.path.join(os.getcwd(), 'samples', run_id)
+    folder = os.path.join(DATA_DIR, run_id)
     file_name = "input_data.txt"
     file_path = os.path.join(folder, file_name)
 
@@ -164,7 +177,8 @@ def send_data_to_device():
 
 
 def fetch_current_via_wifi():
-    """Fetches current and voltage readings from ESP32 and saves to an Excel file with elapsed time."""
+    """Fetches current and voltage readings from the ESP32 and appends them to output_data.txt with elapsed time."""
+    global start_time
 
     try:
         response = requests.get(f"{ESP32_IP}/get_readings")  # Request data from ESP32
@@ -185,8 +199,8 @@ def fetch_current_via_wifi():
             # Update GUI label with fetched values
             current_label.config(text=f"Time: {elapsed_time} s, Current: {current_value} mA, Voltage: {bus_voltage} V")
 
-            # Save to Excel
-            save_to_excel(elapsed_time, current_value, bus_voltage)
+            # Save this reading to output_data.txt
+            save_readings(elapsed_time, current_value, bus_voltage)
 
         else:
             messagebox.showerror("Error", f"Failed to fetch data: {response.text}")
@@ -244,8 +258,8 @@ def fetch_current_via_uart():
         elapsed_time = round(time.time() - start_time, 2)
         current_label.config(text=f"Time: {elapsed_time} s, Current: {current} mA, Voltage: {voltage} V")
 
-        # Save to Excel
-        save_to_excel(elapsed_time, current, voltage)
+        # Save this reading to output_data.txt
+        save_readings(elapsed_time, current, voltage)
 
         try:
             time_list.append(float(elapsed_time))
@@ -311,8 +325,12 @@ def stop_camera_recording():
     print("Camera recording stopped.")
 
 def start_fetch():
-    global running
+    global running, run_id, start_time
     if not running:
+        run_id = new_run_id()      # Start a new run folder so this recording is kept on its own
+        start_time = None          # Restart the elapsed-time clock at 0 for this run
+        time_list.clear()          # Clear the plot so it shows only this run
+        current_list.clear()
         enter_data(show_message=False)
         start_camera_recording()
         running = True
@@ -328,8 +346,8 @@ def stop_process():                # Send STOP to stop the process. Arduino code
         serial_connection.write(b"STOP\n")
 
 
-def save_to_excel(elapsed_time, current, voltage):
-    folder = os.path.join(os.getcwd(), 'samples', run_id)
+def save_readings(elapsed_time, current, voltage):
+    folder = os.path.join(DATA_DIR, run_id)
     file_name = "output_data.txt"
     file_path = os.path.join(folder, file_name)
 
