@@ -22,6 +22,9 @@ start_time = None  # Global variable to track start time
 running = False
 run_id = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
+# Fixed location for saved data, independent of where this script is launched from
+DATA_DIR = r'C:\WEPS(final files)\Input-Output Data'
+
 serial_connection = None                    # Global serial connection variable
 
 ESP32_IP = "http://<ESP32_IP>"              # ESP32-S3 IP Address placeholder (Replace with actual IP)
@@ -112,7 +115,7 @@ def enter_data(show_message=True):               # Function to enter data into t
     speed = speed_entry.get()                    # Get speed input
     current_limit=current_limit_entry.get()
 
-    folder = os.path.join(os.getcwd(), 'samples', run_id)
+    folder = os.path.join(DATA_DIR, run_id)
     file_name = "input_data.txt"
     file_path = os.path.join(folder, file_name)
 
@@ -329,7 +332,7 @@ def stop_process():                # Send STOP to stop the process. Arduino code
 
 
 def save_to_excel(elapsed_time, current, voltage):
-    folder = os.path.join(os.getcwd(), 'samples', run_id)
+    folder = os.path.join(DATA_DIR, run_id)
     file_name = "output_data.txt"
     file_path = os.path.join(folder, file_name)
 
