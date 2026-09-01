@@ -71,7 +71,6 @@ C:\WEPS(final files)\Input-Output Data\<run_id>\
 - `DATA_DIR` is a fixed absolute path, deliberately **not** relative to the launch directory — the code runs on a lab machine where the working directory is not predictable. Do not change it back to `os.getcwd()`.
 - `run_id` comes from `new_run_id()`, minted fresh in `start_fetch()` so runs never share a file. It appends `_2`, `_3` etc. if two runs start in the same second.
 - Despite the commas, `output_data.txt` is **not** CSV — labels are interleaved with values.
-- The unused `samples/` folder is a leftover from when output was written relative to the repo.
 
 ## Hardware Context
 
