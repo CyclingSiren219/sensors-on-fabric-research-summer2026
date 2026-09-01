@@ -20,10 +20,23 @@ from datetime import datetime
 
 start_time = None  # Global variable to track start time
 running = False
-run_id = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
 # Fixed location for saved data, independent of where this script is launched from
 DATA_DIR = r'C:\WEPS(final files)\Input-Output Data'
+
+
+def new_run_id():
+    """Returns a timestamped folder name for one run, kept unique if two runs start in the same second."""
+    stamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    candidate = stamp
+    suffix = 2
+    while os.path.exists(os.path.join(DATA_DIR, candidate)):
+        candidate = f"{stamp}_{suffix}"
+        suffix += 1
+    return candidate
+
+
+run_id = new_run_id()   # Folder for the current run; a fresh one is created each time Fetch Current is clicked
 
 serial_connection = None                    # Global serial connection variable
 
@@ -314,8 +327,12 @@ def stop_camera_recording():
     print("Camera recording stopped.")
 
 def start_fetch():
-    global running
+    global running, run_id, start_time
     if not running:
+        run_id = new_run_id()      # Start a new run folder so this recording is kept on its own
+        start_time = None          # Restart the elapsed-time clock at 0 for this run
+        time_list.clear()          # Clear the plot so it shows only this run
+        current_list.clear()
         enter_data(show_message=False)
         start_camera_recording()
         running = True
