@@ -1,6 +1,6 @@
 # WEPS Sensor GUI — Summer 2026
 
-This application provides a graphical interface for running electrochemical sensor experiments as part of the USF Wearable Electronic Patch Sensors (WEPS) research project. It communicates with an ESP32-S3 microcontroller, logs sensor readings in real time, and (in the Modified version) automatically starts and stops Windows Camera recording in sync with data collection.
+This application provides a graphical interface for running electrochemical sensor experiments as part of the USF Wearable Electronic Patch Sensors (WEPS) research project. It communicates with an ESP32-S3 microcontroller, logs sensor readings in real time, and automatically starts and stops Windows Camera recording in sync with data collection.
 
 ---
 
@@ -16,7 +16,7 @@ This application provides a graphical interface for running electrochemical sens
 
 ## Setup
 
-### 1. Run the app
+### Run the app
 
 ```
 python main.py
@@ -24,7 +24,26 @@ python main.py
 
 A Tkinter window will open — this is the experiment GUI.
 
-### Legacy / Backup notebooks
+---
+
+## Running an Experiment — Step by Step
+
+Do these in order. Steps 1–3 are once per session; steps 4–6 repeat for each recording.
+
+1. **Open the Windows Camera app and switch it to video mode**, and leave it open in the background. Do this *before* launching the GUI — the app will not open Camera for you. (Details under [Camera Recording](#camera-recording).)
+2. **Select the Serial Port** for the ESP32-S3 — click **Refresh COM Ports** if it isn't listed — then click **Connect**.
+3. Leave the connection dropdown on **UART** (the default).
+4. Fill in **Voltage**, **Syringe Size**, **Speed**, and **Current Limit**, then click **Send to Device** to push them to the ESP32-S3.
+5. Click **Fetch Current** to start the run. This does four things at once: creates a new timestamped run folder, saves the input values into it, starts the camera recording, and begins logging and plotting readings.
+6. Click **Stop Fetch** to end the run. This stops both the logging and the camera recording.
+
+To do another recording, repeat steps 4–6 — each **Fetch Current** starts a fresh run in its own folder. You do not need to restart the program between runs.
+
+> **Fetch Current / Stop Fetch** start and stop a *run*. **Stop Process** is unrelated — it sends a `STOP` command to the microcontroller and does not end the run or the recording.
+
+---
+
+## Legacy / Backup notebooks
 
 The `.ipynb` files are kept as backups only. To open them:
 
@@ -47,8 +66,9 @@ Select the file, then use **Run → Run All Cells**.
 | Speed (ml/hr) | Flow rate of the syringe pump |
 | Current Limit (mA) | Maximum allowable current |
 | Serial Port | COM port for UART connection (e.g. `COM3`) |
+| Connection mode | Dropdown: **UART** (default) or **Wi-Fi** |
 
-Use the **Refresh COM Ports** dropdown to detect available ports.
+Click **Refresh COM Ports** to re-scan for available ports if yours isn't in the list.
 
 ### Buttons
 
@@ -65,28 +85,33 @@ Use the **Refresh COM Ports** dropdown to detect available ports.
 
 ### Real-time plot
 
-While fetching, a live **Time vs. Current** graph updates inside the GUI window. It displays a rolling window of the 100 most recent readings. Elapsed time is measured from the moment the first reading is received.
+While fetching, a live **Time vs. Current** graph updates inside the GUI window. It displays a rolling window of the 100 most recent readings. Elapsed time restarts at 0 at the start of each run, and the graph is cleared so it shows only the current run.
+
+Note: the plot is only drawn in **UART** mode. In Wi-Fi mode readings are still logged to file, but the graph does not update.
 
 ---
 
-## Data Logging — What's New
+## Data Logging
 
-Previously, all output files were written to a hardcoded Windows path (`C:\WEPS(final files)\`). This caused problems if that folder didn't exist and made it impossible to keep data from separate runs separate.
+Earlier versions wrote all output straight into a hardcoded Windows path (`C:\WEPS(final files)\`), so data from separate runs was impossible to keep apart.
 
-**The Modified notebook now saves data into a timestamped subfolder inside a `samples/` directory located in the same folder as the notebook.**
+**Data is now saved into a timestamped subfolder inside a fixed folder: `C:\WEPS(final files)\Input-Output Data`.** The path is set once at the top of [main.py](main.py) as `DATA_DIR`, so it does not depend on the directory the script is launched from.
 
 ### Folder structure
 
-Every time you launch the notebook and run the cells, a unique `run_id` is generated from the current date and time:
+Every time you click **Fetch Current**, a new `run_id` is generated from the current date and time, and that recording gets its own folder:
 
 ```
-samples/
-└── 2026-06-10_14-32-07/
+C:\WEPS(final files)\Input-Output Data\
+├── 2026-06-10_14-32-07/     <- first Fetch
+│   ├── input_data.txt
+│   └── output_data.txt
+└── 2026-06-10_15-04-51/     <- second Fetch
     ├── input_data.txt
     └── output_data.txt
 ```
 
-The subfolder is created automatically the first time data is written — you do not need to create it manually.
+The subfolder is created automatically the first time data is written — you do not need to create it manually. Elapsed time restarts at 0 for each run, so each `output_data.txt` holds exactly one recording and nothing has to be split apart afterwards.
 
 ### File contents
 
@@ -95,7 +120,7 @@ The subfolder is created automatically the first time data is written — you do
 Voltage: 1.5, Syringe Size: 10, Speed: 5, Current limit: 2.5
 ```
 
-Note: if you change an input field mid-recording, it is only logged if you click **Enter Data** again — the auto-capture on **Fetch Current** only happens once, at the start of the run. Each line is appended, not overwritten, and is not timestamped, so multiple lines in the file aren't tied to a specific point in the run.
+Note: if you change an input field mid-recording, it is only logged if you click **Enter Data** again — the auto-capture on **Fetch Current** only happens once, at the start of the run. Clicking **Enter Data** *before* your first **Fetch Current** of the session writes into a run folder of its own, which will then contain an `input_data.txt` with no matching `output_data.txt`. Each line is appended, not overwritten, and is not timestamped, so multiple lines in the file aren't tied to a specific point in the run.
 
 **`output_data.txt`** — written on every reading while **Fetch Current** is active:
 ```
@@ -130,4 +155,4 @@ When you click **Stop Fetch**, the same steps repeat to stop recording.
 
 ### Where recordings are saved
 
-Camera recordings are saved to the default Windows Camera save location (typically `C:\Users\<you>\Videos\`) and are not moved into the `samples/` folder automatically.
+Camera recordings are saved to the default Windows Camera save location (typically `C:\Users\<you>\Videos\`) and are not moved into the run folder automatically.
