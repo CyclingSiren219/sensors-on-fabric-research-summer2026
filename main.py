@@ -119,7 +119,7 @@ def send_data_via_uart():                                                    # F
     except Exception as e:
         messagebox.showerror("Error", f"Failed to send data:\n{e}")             # Show error message
 
-def enter_data(show_message=True):               # Function to enter data into the Excel file
+def enter_data(show_message=True):               # Function to write the input values to input_data.txt
     voltage = voltage_entry.get()                # Get voltage input
     syringe_size = syringe_size_entry.get()      # Get syringe size input
     speed = speed_entry.get()                    # Get speed input
@@ -177,7 +177,8 @@ def send_data_to_device():
 
 
 def fetch_current_via_wifi():
-    """Fetches current and voltage readings from ESP32 and saves to an Excel file with elapsed time."""
+    """Fetches current and voltage readings from the ESP32 and appends them to output_data.txt with elapsed time."""
+    global start_time
 
     try:
         response = requests.get(f"{ESP32_IP}/get_readings")  # Request data from ESP32
