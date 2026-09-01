@@ -5,9 +5,6 @@ from tkinter import filedialog, messagebox  # Importing file dialog and message 
 import subprocess                           # Importing subprocess for opening external applications
 import serial                               # Importing serial module for communication
 import serial.tools.list_ports              # Importing serial tools to list available COM ports
-import openpyxl                             # Importing openpyxl for handling Excel files
-from openpyxl import load_workbook          # Importing function to load Excel workbooks
-import shutil                               # Importing shutil for file operations
 import os                                   # Importing os module for system operations
 import requests                             # Importing requests module for HTTP requests
 import time  # Import time module
@@ -201,8 +198,8 @@ def fetch_current_via_wifi():
             # Update GUI label with fetched values
             current_label.config(text=f"Time: {elapsed_time} s, Current: {current_value} mA, Voltage: {bus_voltage} V")
 
-            # Save to Excel
-            save_to_excel(elapsed_time, current_value, bus_voltage)
+            # Save this reading to output_data.txt
+            save_readings(elapsed_time, current_value, bus_voltage)
 
         else:
             messagebox.showerror("Error", f"Failed to fetch data: {response.text}")
@@ -260,8 +257,8 @@ def fetch_current_via_uart():
         elapsed_time = round(time.time() - start_time, 2)
         current_label.config(text=f"Time: {elapsed_time} s, Current: {current} mA, Voltage: {voltage} V")
 
-        # Save to Excel
-        save_to_excel(elapsed_time, current, voltage)
+        # Save this reading to output_data.txt
+        save_readings(elapsed_time, current, voltage)
 
         try:
             time_list.append(float(elapsed_time))
@@ -348,7 +345,7 @@ def stop_process():                # Send STOP to stop the process. Arduino code
         serial_connection.write(b"STOP\n")
 
 
-def save_to_excel(elapsed_time, current, voltage):
+def save_readings(elapsed_time, current, voltage):
     folder = os.path.join(DATA_DIR, run_id)
     file_name = "output_data.txt"
     file_path = os.path.join(folder, file_name)
