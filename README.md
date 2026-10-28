@@ -1,6 +1,6 @@
 # WEPS Sensor GUI — Summer 2026
 
-This application provides a graphical interface for running electrochemical sensor experiments as part of the USF Wearable Electronic Patch Sensors (WEPS) research project. It communicates with an ESP32-S3 microcontroller, logs sensor readings in real time, and automatically starts and stops Windows Camera recording in sync with data collection.
+This application provides a graphical interface for running electrochemical sensor experiments as part of the USF Wearable Electronic Patch Sensors (WEPS) research project. It communicates with an ESP32-S3 microcontroller, logs sensor readings in real time, automatically starts and stops Windows Camera recording in sync with data collection, and files the resulting video into the same folder as that run's data.
 
 ---
 
@@ -34,8 +34,8 @@ Do these in order. Steps 1–3 are once per session; steps 4–6 repeat for each
 2. **Select the Serial Port** for the ESP32-S3 — click **Refresh COM Ports** if it isn't listed — then click **Connect**.
 3. Leave the connection dropdown on **UART** (the default).
 4. Fill in **Voltage**, **Syringe Size**, **Speed**, and **Current Limit**, then click **Send to Device** to push them to the ESP32-S3.
-5. Click **Fetch Current** to start the run. This does four things at once: creates a new timestamped run folder, saves the input values into it, starts the camera recording, and begins logging and plotting readings.
-6. Click **Stop Fetch** to end the run. This stops both the logging and the camera recording.
+5. Click **Fetch Current** to start the run. This does four things at once: creates a new timestamped run folder, saves the input values into it, starts the camera recording, and begins logging and plotting readings. If the previous run's video is still being saved, the app asks you to wait (up to 30 seconds) instead of starting.
+6. Click **Stop Fetch** to end the run. This stops both the logging and the camera recording, then moves the video into the run folder as `video.mp4`. A **Video saved** dialog confirms it; if you see **Video not saved** instead, see [Camera Recording](#camera-recording).
 
 To do another recording, repeat steps 4–6 — each **Fetch Current** starts a fresh run in its own folder. You do not need to restart the program between runs.
 
@@ -77,8 +77,8 @@ Click **Refresh COM Ports** to re-scan for available ports if yours isn't in the
 | **Enter Data** | Saves the current input field values to `input_data.txt` in the run folder |
 | **Send to Device** | Transmits voltage, syringe size, and flow rate to the ESP32-S3 |
 | **Connect** | Opens the selected COM port at 115200 baud (UART mode only) |
-| **Fetch Current** | Saves the current input field values to `input_data.txt`, then starts continuous data collection, camera recording, and the real-time plot |
-| **Stop Fetch** | Stops data collection and stops camera recording |
+| **Fetch Current** | Saves the current input field values to `input_data.txt`, then starts continuous data collection, camera recording, and the real-time plot. Refuses to start while the previous recording is still running or its video is still being saved |
+| **Stop Fetch** | Stops data collection and camera recording, then moves the recording into the run folder as `video.mp4` |
 | **Stop Process** | Sends a `STOP` command directly to the microcontroller over UART |
 | **Upload File** | Opens a file picker for G-code (`.gcode`) or image files |
 | **Open Software** | Launches LaserGRBL with the uploaded file |
@@ -105,10 +105,12 @@ Every time you click **Fetch Current**, a new `run_id` is generated from the cur
 C:\WEPS(final files)\Input-Output Data\
 ├── 2026-06-10_14-32-07/     <- first Fetch
 │   ├── input_data.txt
-│   └── output_data.txt
+│   ├── output_data.txt
+│   └── video.mp4
 └── 2026-06-10_15-04-51/     <- second Fetch
     ├── input_data.txt
-    └── output_data.txt
+    ├── output_data.txt
+    └── video.mp4
 ```
 
 The subfolder is created automatically the first time data is written — you do not need to create it manually. Elapsed time restarts at 0 for each run, so each `output_data.txt` holds exactly one recording and nothing has to be split apart afterwards.
@@ -129,6 +131,8 @@ Time, 1.02, Current, 2.37, Voltage, 1.50
 ...
 ```
 
+**`video.mp4`** — the Camera recording, moved in from the Camera Roll after **Stop Fetch**. It appears a few seconds after you stop, not instantly. If it could not be moved, it is missing from the run folder and stays in the Camera Roll instead — see [Slow release](#slow-release-the-video-is-left-in-the-camera-roll).
+
 Because each run gets its own folder named by timestamp, you can run multiple experiments back-to-back without overwriting previous data.
 
 ---
@@ -141,18 +145,40 @@ Before clicking **Fetch Current**:
 1. Open the **Windows Camera** app manually
 2. Click the **video icon** on the right side of the screen to switch from photo to video mode
 3. Leave the Camera app open in the background — do not close or minimize it to the taskbar
+4. Leave the Camera app's save location at its default (the **Camera Roll**) — that is the folder the app watches for the new video
 
-`main.py` does not open the Camera app for you. If it is not already open and in video mode when you click **Fetch Current**, an error dialog will appear and data collection will start without a recording.
+The first time Camera runs on a machine it may ask for permissions (camera, microphone, location). Accept them with a manual test recording first, or the prompt can swallow the spacebar the app sends.
+
+`main.py` does not open the Camera app for you. If it is not open when you click **Fetch Current**, an error dialog appears and the run starts without a recording.
 
 ### How it works
 
-When you click **Fetch Current**, the app:
-1. Finds the open Camera window by title and brings it into focus
-2. Sends a **spacebar keystroke** to start recording
-3. Returns focus to the GUI so you can continue using it normally
+**Fetch Current** notes which `WIN_*.mp4` files are already in the Camera Roll, then brings the Camera window into focus, sends a **spacebar keystroke** to start recording, and returns focus to the GUI.
 
-When you click **Stop Fetch**, the same steps repeat to stop recording.
+**Stop Fetch** sends the spacebar again, but only if **Fetch Current** actually started a recording, so clicking it twice is harmless. A background thread then checks the Camera Roll once a second until the new `WIN_*.mp4` is non-empty, has stopped growing, and can be opened for writing. It **moves** (not copies) that file to `<run_id>\video.mp4` and shows a **Video saved** dialog. Older recordings and non-`WIN_` files, such as phone uploads synced by OneDrive, are ignored.
 
-### Where recordings are saved
+Keep your hands off the keyboard and mouse for about a second after clicking either button, and keep the mouse out of the top-left corner of the screen (`pyautogui` aborts there). The app finds Camera by the exact window title "Camera" and falls back to any title containing it, so avoid keeping Explorer open on the Camera Roll folder during a run.
 
-Camera recordings are saved to the default Windows Camera save location (typically `C:\Users\<you>\Videos\`) and are not moved into the run folder automatically.
+### If the video isn't saved
+
+| Dialog | What to do |
+|---|---|
+| **Previous recording still running** | The last **Stop Fetch** failed. Click **Stop Fetch** again before starting a new run |
+| **Please wait** | The previous video is still being saved (up to 30 seconds). Try again shortly |
+| **Video not moved** | The app could not find or read the Camera Roll, so it cannot track the file. The video is wherever Camera saves recordings |
+| **Video not saved** | The video is not in the run folder. The message names the file or folder involved and nothing is deleted. If it says *no new video appeared*, check that Camera was in video mode; otherwise move the file by hand from the path shown |
+
+### Slow release: the video is left in the Camera Roll
+
+Sometimes the file is not released quickly after recording stops: Camera is still finalizing it, or OneDrive, antivirus or the search indexer is holding it. The app waits up to **30 seconds** after **Stop Fetch**. If the file is still changing or locked when that runs out:
+
+- The video is **not moved**. It stays in the Camera Roll under its original `WIN_..._Pro.mp4` name, and nothing is deleted.
+- A **Video not saved** dialog says it *"was still being written or locked after 30 seconds, so it was left there"* and gives the full path.
+- The run folder has `input_data.txt` and `output_data.txt` as usual, but no `video.mp4`. The data files are not affected.
+- **Fetch Current** is blocked during the wait (a **Please wait** dialog) and works again once the **Video not saved** dialog appears.
+
+To recover, wait a little (or close the Camera app) until the file is released, then move it by hand from the path in the dialog into that run's folder, the newest timestamped folder under `C:\WEPS(final files)\Input-Output Data`, and rename it `video.mp4`. The leftover file will not be mistaken for the next run's video.
+
+The readiness check opens the file for writing, so a program holding a *finished* file without allowing writes can also trigger this. The video is then fine: check that it plays, then move it by hand.
+
+If you close the GUI within 30 seconds of **Stop Fetch**, the process stays alive until the video has been dealt with, and the result is printed to the terminal instead of shown in a dialog.

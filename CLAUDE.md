@@ -47,14 +47,14 @@ pip install pyserial requests matplotlib pyautogui pygetwindow
 
 Structure within [main.py](main.py), in file order:
 
-- **Imports and globals** — `DATA_DIR` (fixed output path), `run_id`, `start_time`, `running`, the serial handle, and `ESP32_IP`
+- **Imports and globals** — `DATA_DIR` (fixed output path), `VIDEO_NAME`, `run_id`, `start_time`, `running`, `camera_session`, `video_thread`, the serial handle, and `ESP32_IP`
 - **LaserGRBL integration** — `open_lasergrbl_with_file()` / `upload_file()`; a file dialog takes G-code or image files and `subprocess.Popen` hands them to LaserGRBL at a hardcoded path
 - **Serial setup** — `get_com_ports()` / `refresh_ports()` / `connect_to_com_port()` open the port at 115200 baud
 - **Sending config to the device** — `send_data_to_device()` dispatches on the connection dropdown to `send_data_via_uart()` or `send_data_via_wifi()` (voltage, syringe size, speed)
 - **Fetching readings** — `fetch_current()` dispatches the same way to `fetch_current_via_uart()` / `fetch_current_via_wifi()`. `fetch_loop()` calls it every 0.1 s on a daemon thread while `running` is true
 - **Run lifecycle** — `start_fetch()` begins a run: `new_run_id()` for a fresh folder, `start_time = None` to restart elapsed time at 0, clears the plot lists, writes the inputs, starts the camera. `stop_fetch()` clears `running` and stops the camera
 - **Data logging** — `enter_data()` writes the input parameters, `save_readings()` appends one line per reading. Both open in append mode and target the current run's folder (see below)
-- **Camera control** — `start_camera_recording()` / `stop_camera_recording()` focus the existing Windows Camera window via `pygetwindow` and send a spacebar keystroke via `pyautogui`
+- **Camera control** — `start_camera_recording()` / `stop_camera_recording()` focus the existing Windows Camera window via `pygetwindow` and send a spacebar keystroke via `pyautogui`. Start also snapshots the videos already in the Camera Roll folder (`get_camera_dir()` asks Windows for it); stop hands that snapshot to `collect_video()` on its own thread, which waits for the new `WIN_*.mp4` to finish writing and moves it into the run folder as `video.mp4`. `camera_session` is `None` when no recording is in progress, and stop presses the spacebar only when it is set (the spacebar toggles, so an unmatched press would start a new recording); it is cleared only after the keypress succeeds so a failed stop can be retried. `find_camera_window()` prefers the window titled exactly "Camera" over substring matches. `video_thread` lets `start_fetch()` refuse a new run while the previous video is still being moved
 - **Real-time plot** — matplotlib figure embedded in the Tkinter window; scrolls a 100-point window of Time vs. Current (UART path only)
 - **GUI layer** — Tkinter `LabelFrame` with the input fields, the UART/Wi-Fi dropdown, and the action buttons; `window.mainloop()` on the last line
 
@@ -66,6 +66,7 @@ Each click of **Fetch Current** creates a new timestamped folder:
 C:\WEPS(final files)\Input-Output Data\<run_id>\
     input_data.txt     one line per run: voltage, syringe size, speed, current limit
     output_data.txt    one line per reading: Time, <s>, Current, <mA>, Voltage, <V>
+    video.mp4          the Camera recording, moved in from the Camera Roll after Stop Fetch
 ```
 
 - `DATA_DIR` is a fixed absolute path, deliberately **not** relative to the launch directory — the code runs on a lab machine where the working directory is not predictable. Do not change it back to `os.getcwd()`.
@@ -78,5 +79,5 @@ C:\WEPS(final files)\Input-Output Data\<run_id>\
 - **ESP32-S3** communicates over UART at 115200 baud, or over Wi-Fi via HTTP (`/set_inputs`, `/get_readings`). UART is the dropdown default; using Wi-Fi requires filling in the `ESP32_IP` placeholder at the top of the file
 - The GUI sends experiment parameters and receives current (mA) and voltage (V) readings
 - LaserGRBL is an external engraving application invoked via `subprocess` from `C:\Program Files (x86)\LaserGRBL\LaserGRBL.exe`
-- Camera recordings are saved wherever the Windows Camera app is configured to save them — they are **not** moved into the run folder
+- The Windows Camera app saves recordings to its own folder (the Camera Roll, usually `Pictures\Camera Roll`, redirected into OneDrive on some machines) under a `WIN_<timestamp>_Pro.mp4` name. `collect_video()` *moves* the new file into the run folder after Stop Fetch, so it leaves the Camera Roll. If no new video appears within 30 s, or the move fails, a warning dialog names where the file is
 - Firmware/Arduino code for the ESP32-S3 is **not** in this repository

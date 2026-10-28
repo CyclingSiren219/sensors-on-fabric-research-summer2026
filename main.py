@@ -9,6 +9,9 @@ import os                                   # Importing os module for system ope
 import requests                             # Importing requests module for HTTP requests
 import time  # Import time module
 import threading
+import shutil                                   # Importing shutil for moving the recording into the run folder
+import ctypes                                   # Importing ctypes to ask Windows where the Camera app saves
+import uuid                                     # Importing uuid to build the Windows folder ID that lookup needs
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import pyautogui
@@ -20,6 +23,10 @@ running = False
 
 # Fixed location for saved data, independent of where this script is launched from
 DATA_DIR = r'C:\WEPS(final files)\Input-Output Data'
+
+VIDEO_NAME = "video.mp4"    # Each run's recording is moved into its run folder under this name
+camera_session = None       # None when no recording is in progress, else (Camera Roll folder or None if unknown, videos already in it)
+video_thread = None         # Thread moving the last recording into its run folder
 
 
 def new_run_id():
@@ -303,30 +310,139 @@ def fetch_current():
     else:
         messagebox.showerror("Error", "Please select a connection mode.")
 
+def get_camera_dir():
+    """Returns the folder the Windows Camera app saves to (the Camera Roll), or None if Windows can't say.
+    Asked of Windows rather than hardcoded because the folder depends on the user and on OneDrive."""
+    camera_roll_id = (ctypes.c_ubyte * 16).from_buffer_copy(uuid.UUID('AB5FB87B-7CE2-4F83-915D-550846C9537B').bytes_le)
+    path = ctypes.c_wchar_p()
+    dont_verify = 0x4000                                          # KF_FLAG_DONT_VERIFY: return the path even if the folder hasn't been created yet
+    result = ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(camera_roll_id), dont_verify, None, ctypes.byref(path))
+    folder = path.value if result == 0 else None
+    ctypes.windll.ole32.CoTaskMemFree(path)
+    return folder
+
+def list_videos(folder):
+    """Returns the names of Camera-app recordings (WIN_<timestamp>_*.mp4) in folder, ignoring anything else
+    that lands there, such as phone uploads synced by OneDrive."""
+    return {name for name in os.listdir(folder) if name.startswith("WIN_") and name.lower().endswith(".mp4")}
+
+def find_camera_window():
+    """Returns the Windows Camera app's window, or None. getWindowsWithTitle matches substrings, so the exact title is
+    preferred over other windows that merely contain "Camera", such as Explorer showing the Camera Roll folder."""
+    matches = gw.getWindowsWithTitle("Camera")
+    exact = [match for match in matches if match.title == "Camera"]
+    return (exact or matches or [None])[0]
+
+def notify_from_thread(show, title, message):
+    """Shows a dialog from a worker thread by handing it to the GUI thread; prints instead if the window is gone."""
+    try:
+        window.after(0, lambda: show(title, message))
+    except (RuntimeError, tkinter.TclError):                      # The window was closed while the thread was still working
+        print(f"{title}: {message}")
+
+def collect_video(run_folder, camera_dir, videos_before, timeout=30):
+    """Waits for the Camera app to finish writing the new recording, then moves it into the run folder as video.mp4.
+    Runs on its own thread because Camera takes a moment to finish the file after recording stops."""
+    deadline = time.time() + timeout
+    source = None
+    last_size = None
+    last_error = None
+    ready = False
+    while time.time() < deadline and not ready:
+        try:
+            new_videos = list_videos(camera_dir) - videos_before
+            if new_videos:
+                path = os.path.join(camera_dir, min(new_videos))  # Earliest, in case more than one appeared
+                if path != source:
+                    source, last_size = path, None
+                size = os.path.getsize(source)
+                with open(source, "r+b"):                         # Fails while the Camera app still has the file locked
+                    pass
+                ready = size > 0 and size == last_size            # Same size as one second ago, so Camera has finished
+                last_size = size
+        except OSError as e:
+            last_error = e
+        if not ready:
+            time.sleep(1)
+
+    destination = os.path.join(run_folder, VIDEO_NAME)
+    if ready:
+        try:
+            os.makedirs(run_folder, exist_ok=True)
+            shutil.move(source, destination)
+        except OSError as e:
+            message = f"The recording could not be moved into the run folder and is still at:\n{source}\n\n{e}"
+            try:
+                if os.path.exists(destination):                   # A failed move can leave a copy beside the data
+                    if os.path.getsize(destination) == os.path.getsize(source):
+                        message = f"The recording was copied into the run folder, but the original could not be removed from:\n{source}\n\n{e}"
+                    else:
+                        os.remove(destination)                    # Partial copy: it would look like a valid recording
+            except OSError:
+                pass
+        else:
+            print(f"Video saved to {destination}")
+            notify_from_thread(messagebox.showinfo, "Video saved", f"Saved to:\n{destination}")
+            return
+    elif source:
+        message = f"The recording at:\n{source}\n\nwas still being written or locked after {timeout} seconds, so it was left there."
+    else:
+        message = f"No new video appeared in:\n{camera_dir}\n\nCheck that the Camera app was in video mode."
+    if last_error and not ready:
+        message += f"\n\n{last_error}"
+    notify_from_thread(messagebox.showwarning, "Video not saved", message)
+
 def start_camera_recording():
-    camera_windows = gw.getWindowsWithTitle("Camera")
-    if not camera_windows:
+    global camera_session
+    camera_window = find_camera_window()
+    if not camera_window:
         messagebox.showerror("Error", "Camera app is not open.\nPlease open the Windows Camera app and switch to video mode before starting.")
         return
-    camera_windows[0].activate()
+    camera_dir = get_camera_dir()
+    videos_before = set()
+    if camera_dir:
+        try:
+            videos_before = list_videos(camera_dir)               # Taken before recording starts so the new file stands out
+        except FileNotFoundError:
+            pass                                                  # The folder doesn't exist yet; Camera will create it
+        except OSError:
+            camera_dir = None
+    camera_window.activate()
     time.sleep(0.3)
     pyautogui.press("space")
+    camera_session = (camera_dir, videos_before)                  # Set as soon as the recording has started
     window.focus_force()
     print("Camera recording started.")
 
 def stop_camera_recording():
-    camera_windows = gw.getWindowsWithTitle("Camera")
-    if not camera_windows:
+    global camera_session, video_thread
+    if camera_session is None:                                    # Nothing to stop: the spacebar would start a new recording instead
         return
-    camera_windows[0].activate()
-    time.sleep(0.3)
-    pyautogui.press("space")
-    window.focus_force()
-    print("Camera recording stopped.")
+    camera_window = find_camera_window()
+    if camera_window:
+        camera_window.activate()
+        time.sleep(0.3)
+        pyautogui.press("space")
+        window.focus_force()
+        print("Camera recording stopped.")
+    camera_dir, videos_before = camera_session                    # Cleared only after the keypress, so a failed stop can be retried
+    camera_session = None                                         # If Camera was closed mid-run it saved the file on closing, so still collect it
+    if camera_dir:
+        run_folder = os.path.join(DATA_DIR, run_id)               # Passed in now: run_id changes if a new run starts before the move ends
+        video_thread = threading.Thread(target=collect_video, args=(run_folder, camera_dir, videos_before))
+        video_thread.start()
+    else:
+        messagebox.showwarning("Video not moved", "Could not find or read the Camera Roll folder, so the video was not moved into the run folder.\nIt is wherever the Camera app saves recordings.")
 
 def start_fetch():
     global running, run_id, start_time
     if not running:
+        if camera_session is not None:                            # Stop Fetch failed last time, so Camera may still be recording
+            messagebox.showwarning("Previous recording still running", "The previous run's recording was not stopped.\nClick Stop Fetch first.")
+            return
+        if video_thread and video_thread.is_alive():
+            messagebox.showinfo("Please wait", "The previous run's video is still being saved (this can take up to 30 seconds).\nTry again shortly.")
+            return
         run_id = new_run_id()      # Start a new run folder so this recording is kept on its own
         start_time = None          # Restart the elapsed-time clock at 0 for this run
         time_list.clear()          # Clear the plot so it shows only this run
