@@ -105,10 +105,12 @@ Every time you click **Fetch Current**, a new `run_id` is generated from the cur
 C:\WEPS(final files)\Input-Output Data\
 ├── 2026-06-10_14-32-07/     <- first Fetch
 │   ├── input_data.txt
-│   └── output_data.txt
+│   ├── output_data.txt
+│   └── video.mp4
 └── 2026-06-10_15-04-51/     <- second Fetch
     ├── input_data.txt
-    └── output_data.txt
+    ├── output_data.txt
+    └── video.mp4
 ```
 
 The subfolder is created automatically the first time data is written — you do not need to create it manually. Elapsed time restarts at 0 for each run, so each `output_data.txt` holds exactly one recording and nothing has to be split apart afterwards.
@@ -155,4 +157,16 @@ When you click **Stop Fetch**, the same steps repeat to stop recording.
 
 ### Where recordings are saved
 
-Camera recordings are saved to the default Windows Camera save location (typically `C:\Users\<you>\Videos\`) and are not moved into the run folder automatically.
+The Camera app always saves to its own folder (the **Camera Roll**, usually `Pictures\Camera Roll`) under a name like `WIN_20260610_14_32_07_Pro.mp4`. The app finds that folder by asking Windows, so it follows your username and OneDrive setup automatically.
+
+Right after **Stop Fetch**, the app waits a few seconds for Camera to finish writing the file, then **moves** it into that run's folder as `video.mp4`, next to `input_data.txt` and `output_data.txt`. The file leaves the Camera Roll.
+
+Only files named `WIN_*.mp4` (the Camera app's naming) are picked up, so other videos that land in the Camera Roll, such as phone uploads synced by OneDrive, are left alone.
+
+If the video does not appear within 30 seconds, or cannot be moved, a warning dialog says why and where the file was left. The most common cause is the Camera app being in photo mode instead of video mode.
+
+A **Video saved** dialog appears once the move is done. If you click **Fetch Current** before then, the app asks you to wait a few seconds rather than start a run whose video could be mixed up with the previous one.
+
+**Stop Fetch** only presses the spacebar if **Fetch Current** actually started a recording in that run, so clicking it twice is harmless. If **Stop Fetch** hits an error (for example the Camera window could not be focused), click it again; **Fetch Current** will refuse to start a new run until the old recording has been stopped.
+
+The app looks for a window titled exactly "Camera" and only falls back to any window whose title contains "Camera" if there isn't one. Avoid keeping File Explorer open on the Camera Roll folder during a run anyway, since that fallback could pick it.
